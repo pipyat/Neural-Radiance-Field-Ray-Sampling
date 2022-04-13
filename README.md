@@ -1,2 +1,2 @@
 # Neural-Radiance-Field-Ray-Sampling
-# This codes takes a json file containing camera extrinsic parameters and creates an extrinsic paramater matrix. It then uses this to shoot rays from the origin and into the scene through each pixel. Finally, 3D points are sampled along the rays via uniform and stratified sampling.
+# This is a series of functions that can be used to sample points that can be fed into a neural radiance field. It uses an extrinsic parameter matrix to shoot rays from the origin and into the scene through each pixel. 3D points are sampled along the rays via stratified sampling. Distortion correction and positional encoding is included. 
