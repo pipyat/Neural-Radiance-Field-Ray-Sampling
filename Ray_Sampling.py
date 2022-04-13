@@ -1,95 +1,72 @@
-import numpy as np
-import matplotlib.pyplot as plt
-import json
+def get_rays(H, W, focal_x, focal_y, cam_to_world, Distortion): #cam_to_world is the extrinsic camera matrix, distortion contains the parameters k1, k2, p1, p2, k3
+    x_01, y_01 = np.meshgrid(np.arange(W),np.arange(H)) # Pixel space 
 
+    k1 = float(Distortion[0])
+    k2 = float(Distortion[1])
+    p1 = float(Distortion[2])
+    p2 = float(Distortion[3])
+    k3 = float(Distortion[4])
+    r = (x_01**2 + y_01**2)**0.5
+    x_01 = x_01*((1+k1*r**2+k2*r**4+k3*r**6)/(1)) + 2*p1*x_01*y_01 + p2*(r**2+2*x_01**2)
+    y_01 = y_01*((1+k1*r**2+k2*r**4+k3*r**6)/(1)) + 2*p2*x_01*y_01 + p1*(r**2+2*y_01**2)
 
-with open('/content/extrinsic.camera.01.json', 'r') as f:
-  Extrinsic01 = json.load(f)
+    # Convert to camera reference frame
+    X_camera01 = (x_01-W/2)/focal_x
+    Y_camera01 = (y_01-H/2)/focal_y
 
-Extrinsic01 = Extrinsic01.get('camera')
+    R_inv_01 = cam_to_world[:3,:3]
+    T_inv_01 = cam_to_world[:3,3]
 
-R_01 = Extrinsic01.get("r")
-T_01 = Extrinsic01.get("t")
-R_01 = np.reshape(np.asarray(R_01,dtype = np.float64),(3,3))
-T_01 = np.asarray(T_01,dtype = np.float64)
+    homogeneous = np.stack((X_camera01,-Y_camera01,-np.ones(np.shape(X_camera01))),-1) #Homogeneous coordinates - stack camera coordinates
+    homogeneous_expanded = homogeneous[..., None, :] # One entry for each of the height pixels, each of those has an entry for each of the width pixels so together we have every combination of coordinates
 
-#Pixel to Camera coordinates
+    # Ray direction unit vectors
+    unit_vectors = np.matmul(R_inv_01, np.transpose(homogeneous_expanded[0][0]))/np.linalg.norm(np.matmul(R_inv_01, np.transpose(homogeneous_expanded[0][0]))) # This needs to be removed at the end
+    for i in range(0,len(homogeneous_expanded)): 
+      for j in range(0,len(homogeneous_expanded[0])): 
+        insert = np.matmul(R_inv_01, np.transpose(homogeneous_expanded[i][j]))
+        insert = insert/np.linalg.norm(insert)
+        unit_vectors = np.row_stack((unit_vectors,insert)) # As values are stacked, we have x,y,z,x,y,z,.... so the length is 3 times the number of vectors we need
 
-W_01 = float(Extrinsic01.get("width")) 
-H_01 = float(Extrinsic01.get("height"))
-fx_01 = float(Extrinsic01.get("fx"))
-fy_01 = float(Extrinsic01.get("fy"))
+    origin = T_inv_01 # The ray origin is the camera to world translation vector
 
-#Pixel grid of size imageWidth x imageHeight
-x_01, y_01 = np.meshgrid(np.arange(W_01+1),np.arange(H_01+1)) #Not a tensorflow tensor
+    dir = []
+    for i in range(len(unit_vectors[3:])//3):
+      start = i*3
+      dir.append(unit_vectors[3:][start:start+3])
 
-X_camera01 = (x_01-W_01/2)/fx_01 # Assume z = 1
-Y_camera01 = (y_01-H_01/2)/fy_01
+    return origin, dir 
+  
+#--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-C_01 = np.matmul(np.transpose(R_01),T_01) # Position of camera in world coordinates
+def sample_points(origin, unit_vectors, t_n, t_f, points_stratified):  # r(t) = x_0 + t*d with near and far bounds, t_n and t_f
 
-# Building the extrinsic camera matrix
-C_ex_01 = np.column_stack((R_01,T_01))
-C_ex_01 = np.row_stack((C_ex_01,np.array([0,0,0,1])))
-print(C_ex_01)
+    # Compute 3D query points
+    bins = (t_f-t_n)/points_stratified # Split rays into a number (points_stratified) of bins
 
-cam_to_world01 = np.linalg.inv(C_ex_01) # Inverse of extrinsic camera matrix -> goes from camera to world
-print(cam_to_world01)
-R_inv_01 = cam_to_world01[:3,:3]
-T_inv_01 = cam_to_world01[:3,3]
+    sample_points_stratified = []
+    for i in range(0,points_stratified): # start from 0 or 1???
+      sample_points_stratified.append(np.random.uniform(t_n+(i-1)*bins,t_n+(i)*bins)) #Points along ray to be sampled. Using this method, the same places along every ray sampled
 
-homogeneous = np.stack((X_camera01,-Y_camera01,-np.ones(np.shape(X_camera01))),-1) #Homogeneous coordinates - stack camera coordinates
-homogeneous_expanded = homogeneous[..., None, :]
+    coords_stratified01 = []
+    for j in range(0,len(unit_vectors)): #Go through each of the direction unit vectors, each corresponding to a pixel
+      sample_locations_stratified = []
+      for i in range(0,len(sample_points_stratified)): #Go through all points along a ray and store the coordinates
+        sample_locations_stratified.append(np.asarray(origin)+sample_points_stratified[i]*np.asarray(np.transpose(unit_vectors[0]))) # r(t) = x_0 + t*d with near and far bounds, t_n and t_f
+      coords_stratified01.append(np.squeeze(sample_locations_stratified)) # 3D array for every point sampled, e.g. the first entry is the first sampled point via the first ray, second entry is the second sampled point via the first ray etc
 
-# RAY SAMPLING
+    return coords_stratified01, sample_points_stratified #Returns samples coordinates for every ray and t values 
 
-# Ray direction unit vectors
-unit_vectors01 = np.matmul(R_inv_01, np.transpose(homogeneous_expanded[0][0]))/np.linalg.norm(np.matmul(R_inv_01, np.transpose(homogeneous_expanded[0][0])))
-for i in range(0,101):
-  for j in range(1,101):
-    insert = np.matmul(R_inv_01, np.transpose(homogeneous_expanded[i][j]))
-    insert = insert/np.linalg.norm(insert)
-    unit_vectors01 = np.row_stack((unit_vectors01,insert))
+#--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  
+# POSITIONAL ENCODING - allows network to deal with high frequency signals 
 
-# Ray origin - shoots into scene through each pixel
-origin01 = T_inv_01 # camera to world translation vector
-
-
-# Sampled points from along ray:
-
-# r(t) = x_0 + t*d with near and far bounds, t_n and t_f
-
-points_uniform = 100
-t_f = 10 # Far Bound
-t_n = 60 # Near Bound
-point_locations_uniform = (t_f-t_n)/points_uniform
-sample_points_uniform = []
-for i in range(0,points_uniform+1):
-  sample_points_uniform.append(i*(t_f-t_n)/points_uniform) #Points along ray to be sampled. Using this method, the same places along every ray sampled
-
-coords_uniform01 = []
-for j in range(0,len(unit_vectors01)): #Go through each of the direction unit vectors, each corresponding to a pixel
-  sample_locations_uniform = []
-  for i in range(0,len(sample_points_uniform)): #Go through all points along a ray and store the coordinates
-    sample_locations_uniform.append(origin01+sample_points_uniform[i]*unit_vectors01[j])
-  coords_uniform01.append(sample_locations_uniform)
-#coords_uniform01 structure contains sampled points in 3D space for all pixel rays
-
-
-#Stratified Sampling: divide the population into bins and sample one point uniformly from them
-
-points_stratified = 100
-t_f = 10 # Far Bound
-t_n = 60 # Near Bound
-bins = (t_f-t_n)/points_stratified # Split rays into a number (points_stratified) of bins
-
-sample_points_stratified = []
-for i in range(1,points_stratified):
-  sample_points_stratified.append(np.random.uniform(t_n+(i-1)*bins,t_n+(i)*bins)) #Points along ray to be sampled. Using this method, the same places along every ray sampled
-
-coords_stratified01 = []
-for j in range(0,len(unit_vectors01)): #Go through each of the direction unit vectors, each corresponding to a pixel
-  sample_locations_stratified = []
-  for i in range(0,len(sample_points_stratified)): #Go through all points along a ray and store the coordinates
-    sample_locations_stratified.append(origin01+sample_points_stratified[i]*unit_vectors01[j])
-  coords_stratified01.append(sample_locations_stratified)
+def encoding(vector, L):
+  enc = []
+  for j in vector:
+    component = []
+    for i in range(L):
+      component.append(np.sin(2**i*j))
+      component.append(np.cos(2**i*j))
+    enc.append(component)
+  return enc
