@@ -1,4 +1,4 @@
-def get_rays(H, W, focal_x, focal_y, cam_to_world, Distortion): #cam_to_world is the extrinsic camera matrix, distortion contains the parameters k1, k2, p1, p2, k3
+def get_rays(H, W, focal_x, focal_y, cam_to_world, Distortion): #cam_to_world is the inverse of extrinsic camera matrix, distortion contains the parameters k1, k2, p1, p2, k3
     x_01, y_01 = np.meshgrid(np.arange(W),np.arange(H)) # Pixel space 
 
     k1 = float(Distortion[0])
