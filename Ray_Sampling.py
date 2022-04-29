@@ -45,14 +45,14 @@ def sample_points(origin, unit_vectors, t_n, t_f, points_stratified):  # r(t) = 
     bins = (t_f-t_n)/points_stratified # Split rays into a number (points_stratified) of bins
 
     sample_points_stratified = []
-    for i in range(0,points_stratified): # start from 0 or 1???
+    for i in range(0,points_stratified):
       sample_points_stratified.append(np.random.uniform(t_n+(i-1)*bins,t_n+(i)*bins)) #Points along ray to be sampled. Using this method, the same places along every ray sampled
 
     coords_stratified01 = []
     for j in range(0,len(unit_vectors)): #Go through each of the direction unit vectors, each corresponding to a pixel
       sample_locations_stratified = []
       for i in range(0,len(sample_points_stratified)): #Go through all points along a ray and store the coordinates
-        sample_locations_stratified.append(np.asarray(origin)+sample_points_stratified[i]*np.asarray(np.transpose(unit_vectors[0]))) # r(t) = x_0 + t*d with near and far bounds, t_n and t_f
+        sample_locations_stratified.append(np.asarray(origin)+sample_points_stratified[i]*np.asarray(np.transpose(unit_vectors[0]))) 
       coords_stratified01.append(np.squeeze(sample_locations_stratified)) # 3D array for every point sampled, e.g. the first entry is the first sampled point via the first ray, second entry is the second sampled point via the first ray etc
 
     return coords_stratified01, sample_points_stratified #Returns samples coordinates for every ray and t values 
