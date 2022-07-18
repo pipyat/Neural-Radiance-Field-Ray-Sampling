@@ -10,12 +10,12 @@ def get_rays(H, W, focal_x, focal_y, cam_to_world, Distortion): #cam_to_world is
     x_01 = x_01*((1+k1*r**2+k2*r**4+k3*r**6)/(1)) + 2*p1*x_01*y_01 + p2*(r**2+2*x_01**2)
     y_01 = y_01*((1+k1*r**2+k2*r**4+k3*r**6)/(1)) + 2*p2*x_01*y_01 + p1*(r**2+2*y_01**2)
 
-    # Convert to camera reference frame
+    # Convert pixels to camera reference frame
     X_camera01 = (x_01-W/2)/focal_x
     Y_camera01 = (y_01-H/2)/focal_y
 
-    R_inv_01 = cam_to_world[:3,:3]
-    T_inv_01 = cam_to_world[:3,3]
+    R_inv_01 = cam_to_world[:3,:3] # Cam2world rotation
+    T_inv_01 = cam_to_world[:3,3] # Cam2world translation
 
     homogeneous = np.stack((X_camera01,-Y_camera01,-np.ones(np.shape(X_camera01))),-1) #Homogeneous coordinates - stack camera coordinates
     homogeneous_expanded = homogeneous[..., None, :] # One entry for each of the height pixels, each of those has an entry for each of the width pixels so together we have every combination of coordinates
