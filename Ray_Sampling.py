@@ -10,7 +10,7 @@ def get_rays(H, W, focal_x, focal_y, cam_to_world, Distortion): #cam_to_world is
     x_01 = x_01*((1+k1*r**2+k2*r**4+k3*r**6)/(1)) + 2*p1*x_01*y_01 + p2*(r**2+2*x_01**2)
     y_01 = y_01*((1+k1*r**2+k2*r**4+k3*r**6)/(1)) + 2*p2*x_01*y_01 + p1*(r**2+2*y_01**2)
 
-    # Convert pixels to camera reference frame
+    # Convert pixels to camera reference frame - uses intrinsic parameters
     X_camera01 = (x_01-W/2)/focal_x
     Y_camera01 = (y_01-H/2)/focal_y
 
@@ -28,7 +28,7 @@ def get_rays(H, W, focal_x, focal_y, cam_to_world, Distortion): #cam_to_world is
         insert = insert/np.linalg.norm(insert)
         unit_vectors = np.row_stack((unit_vectors,insert)) # As values are stacked, we have x,y,z,x,y,z,.... so the length is 3 times the number of vectors we need
 
-    origin = T_inv_01 # The ray origin is the camera to world translation vector, be careful how this is defined since X_c = R*X_w + R*t = R*X_w + T 
+    origin = T_inv_01 # The ray origin is the camera to world translation vector: -R^(-1)*T
 
     dir = []
     for i in range(len(unit_vectors[3:])//3):
@@ -59,7 +59,7 @@ def sample_points(origin, unit_vectors, t_n, t_f, points_stratified):  # r(t) = 
 
 #--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
   
-# POSITIONAL ENCODING - allows network to deal with high frequency signals 
+# POSITIONAL ENCODING - allows network to deal with high frequency signals e.g. rapid colour changes 
 
 def encoding(vector, L):
   enc = []
